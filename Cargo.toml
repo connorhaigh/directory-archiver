@@ -1,0 +1,18 @@
+[package]
+name = "directory-archiver"
+authors = ["Connor Haigh"]
+description = "Directory Archiver is a command-line application for archiving directories for preservation."
+version = "0.1.0"
+edition = "2021"
+
+license = "MIT"
+repository = "https://github.com/connorhaigh/directory-archiver"
+readme = "readme.md"
+keywords = ["utility"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+clap = { version = "4.1.4", features = ["derive"] }
+serde = { version = "1.0.140", features = ["derive"] }
+serde_json = "1.0.82"
+zip = "0.6.3"
