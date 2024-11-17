@@ -250,6 +250,7 @@ dependencies = [
  "clap",
  "serde",
  "serde_json",
+ "wildmatch",
  "zip",
 ]
 
@@ -535,6 +536,12 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "wildmatch"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68ce1ab1f8c62655ebe1350f589c61e505cf94d385bc6a12899442d9081e71fd"
 
 [[package]]
 name = "windows-sys"

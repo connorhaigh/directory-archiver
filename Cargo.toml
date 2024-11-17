@@ -15,4 +15,5 @@ categories = ["command-line-utilities"]
 clap = { version = "4.1.4", features = ["derive"] }
 serde = { version = "1.0.140", features = ["derive"] }
 serde_json = "1.0.82"
+wildmatch = "2.4.0"
 zip = "0.6.3"

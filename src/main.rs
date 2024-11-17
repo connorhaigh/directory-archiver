@@ -9,6 +9,7 @@ use std::{
 
 use clap::Parser;
 use profile::{Profile, ProfileError};
+use wildmatch::WildMatch;
 use zip::{write::FileOptions, CompressionMethod, ZipWriter};
 
 mod profile;
@@ -37,7 +38,7 @@ fn main() {
 
 /// Represents an archive-related error.
 #[derive(Debug)]
-pub enum ArchiveError {
+enum ArchiveError {
 	/// Indicates that the profile could not be loaded.
 	FailedToLoad(ProfileError),
 
@@ -69,7 +70,7 @@ pub enum ArchiveError {
 	FailedToDetermineParentPath,
 }
 
-pub type ArchiveResult = Result<(), ArchiveError>;
+type ArchiveResult = Result<(), ArchiveError>;
 
 impl Display for ArchiveError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -90,8 +91,13 @@ impl Display for ArchiveError {
 
 impl Error for ArchiveError {}
 
+struct Ctx<'a> {
+	profile: &'a Profile,
+	ignores: &'a [WildMatch],
+}
+
 /// Archives the entries described by the specified profile to the specified file.
-pub fn archive<T, V>(profile: T, file: V) -> ArchiveResult
+fn archive<T, V>(profile: T, file: V) -> ArchiveResult
 where
 	T: AsRef<Path>,
 	V: AsRef<Path>,
@@ -105,10 +111,10 @@ where
 	let start = Instant::now();
 	let file = File::create(file).map_err(ArchiveError::FailedToCreateArchive)?;
 
-	// Determine the shared parent path.
+	// Determine the shared parent path and ignores.
 
 	#[rustfmt::skip]
-	let parent = profile.dirs.iter()
+	let parent: &Path = profile.dirs.iter()
 		.flat_map(|path|
 			path.ancestors().find(|ancestor|
 				profile.dirs.iter().all(|path|
@@ -116,16 +122,26 @@ where
 		.next()
 		.ok_or(ArchiveError::FailedToDetermineParentPath)?;
 
+	#[rustfmt::skip]
+	let ignores: Vec<WildMatch> = profile.ignores.iter()
+		.map(|i| WildMatch::new(i))
+		.collect();
+
 	let mut writer = ZipWriter::new(file);
 
 	// Iterate and archive each directory and its contents.
 
-	println!("Archiving {} directories...", profile.dirs.len());
+	let ctx = Ctx {
+		profile: &profile,
+		ignores: &ignores,
+	};
 
-	for dir in &profile.dirs {
+	println!("Archiving {} directories...", ctx.profile.dirs.len());
+
+	for dir in &ctx.profile.dirs {
 		println!("Archiving directory <{}>...", dir.display());
 
-		if let Err(e) = compress_dir(&mut writer, &profile, &parent, dir) {
+		if let Err(e) = compress_dir(&mut writer, &ctx, &parent, dir) {
 			println!("Failed to archive directory: {}.", e);
 		}
 	}
@@ -134,7 +150,7 @@ where
 
 	println!("Finishing archive...");
 
-	writer.set_comment(format!("Directory Archiver [{}]", &profile.name));
+	writer.set_comment(format!("Directory Archiver [{}]", &ctx.profile.name));
 	writer.finish().map_err(ArchiveError::FailedToFinishArchive)?;
 
 	println!("Created and finished archive in {:#?}.", start.elapsed());
@@ -143,12 +159,12 @@ where
 }
 
 /// Attempts to recursively compress the specified sub-directory to the specified writer.
-fn compress_dir<T, V>(writer: &mut ZipWriter<File>, profile: &Profile, parent: T, dir: V) -> ArchiveResult
+fn compress_dir<T, V>(writer: &mut ZipWriter<File>, ctx: &Ctx, parent: T, dir: V) -> ArchiveResult
 where
 	T: AsRef<Path>,
 	V: AsRef<Path>,
 {
-	if is_ignored(profile, &dir) {
+	if is_ignored(ctx, &dir) {
 		return Ok(());
 	}
 
@@ -167,13 +183,13 @@ where
 
 		match entry.metadata().map_err(ArchiveError::FailedToInspectPath)? {
 			m if m.is_dir() => {
-				if let Err(e) = compress_dir(writer, profile, parent.as_ref(), &path) {
-					println!("Failed to include sub-directory <{}>: {}.", path.display(), e);
+				if let Err(e) = compress_dir(writer, ctx, parent.as_ref(), &path) {
+					println!("Failed to compress sub-directory <{}>: {}.", path.display(), e);
 				}
 			}
 			m if m.is_file() => {
-				if let Err(e) = compress_file(writer, profile, parent.as_ref(), &path) {
-					println!("Failed to include sub-file <{}>: {}.", path.display(), e);
+				if let Err(e) = compress_file(writer, ctx, parent.as_ref(), &path) {
+					println!("Failed to compress sub-file <{}>: {}.", path.display(), e);
 				}
 			}
 			_ => {}
@@ -184,12 +200,12 @@ where
 }
 
 /// Attempts to compress the specified sub-file to the specified writer.
-fn compress_file<T, V>(writer: &mut ZipWriter<File>, profile: &Profile, parent: T, file: V) -> ArchiveResult
+fn compress_file<T, V>(writer: &mut ZipWriter<File>, ctx: &Ctx, parent: T, file: V) -> ArchiveResult
 where
 	T: AsRef<Path>,
 	V: AsRef<Path>,
 {
-	if is_ignored(profile, &file) {
+	if is_ignored(ctx, &file) {
 		return Ok(());
 	}
 
@@ -212,16 +228,16 @@ where
 	Ok(())
 }
 
-/// Determines if the specified path is ignored at all by the specified profile.
-fn is_ignored<T>(profile: &Profile, path: T) -> bool
+/// Determines if the specified path is ignored at all by the specified context.
+fn is_ignored<T>(ctx: &Ctx, path: T) -> bool
 where
 	T: AsRef<Path>,
 {
 	#[rustfmt::skip]
 	let ignored = path.as_ref()
 		.file_name()
-		.and_then(|n| n.to_str())
-		.map(|n| profile.ignores.iter().any(|i| i == n))
+		.and_then(|name| name.to_str())
+		.map(|name| ctx.ignores.iter().any(|ignore| ignore.matches(name)))
 		.unwrap_or(false);
 
 	ignored
