@@ -3,8 +3,9 @@ use std::{
 	fmt::Display,
 	fs::{self, File},
 	io::{self, BufReader},
+	ops::Sub,
 	path::{self, Path, PathBuf},
-	time::Instant,
+	time::{Duration, Instant, SystemTime},
 };
 
 use clap::Parser;
@@ -173,7 +174,13 @@ where
 
 	#[allow(deprecated)]
 	writer
-		.add_directory_from_path(path, FileOptions::default().compression_method(CompressionMethod::Bzip2).compression_level(Some(9)))
+		.add_directory_from_path(
+			path,
+			FileOptions::default()
+				.compression_method(CompressionMethod::Bzip2)
+				.compression_level(Some(9))
+				.last_modified_time(to_last_modified_time(path)),
+		)
 		.map_err(ArchiveError::FailedToMarkEntry)?;
 
 	// Recursively compress each entry.
@@ -220,12 +227,44 @@ where
 
 	#[allow(deprecated)]
 	writer
-		.start_file_from_path(path, FileOptions::default().compression_method(CompressionMethod::Bzip2).compression_level(Some(9)))
+		.start_file_from_path(
+			path,
+			FileOptions::default()
+				.compression_method(CompressionMethod::Bzip2)
+				.compression_level(Some(9))
+				.last_modified_time(to_last_modified_time(path)),
+		)
 		.map_err(ArchiveError::FailedToMarkEntry)?;
 
 	io::copy(&mut reader, writer).map_err(ArchiveError::FailedToCopyFile)?;
 
 	Ok(())
+}
+
+/// Returns an optimistic estimation as to the last modified time for the specified path in ZIP format.
+fn to_last_modified_time<T>(path: T) -> zip::DateTime
+where
+	T: AsRef<Path>,
+{
+	const DOS_EPOCH_OFFSET: Duration = Duration::from_secs(315576000);
+
+	#[rustfmt::skip]
+	let seconds = path.as_ref().metadata().and_then(|m| m.modified())
+		.unwrap_or(SystemTime::now()).duration_since(SystemTime::UNIX_EPOCH).map(|d| d.sub(DOS_EPOCH_OFFSET))
+		.unwrap_or(Duration::ZERO)
+		.as_secs_f64();
+
+	let last_modified = zip::DateTime::from_date_and_time(
+		1980 + ((seconds / 60f64 / 60f64 / 24f64 / 365.2425f64) as u16),
+		1, // TODO
+		1, // TODO
+		(seconds / 3600f64 % 24f64) as u8,
+		(seconds / 60f64 % 60f64) as u8,
+		(seconds % 60f64) as u8,
+	)
+	.unwrap_or(zip::DateTime::default());
+
+	last_modified
 }
 
 /// Determines if the specified path is ignored at all by the specified context.
