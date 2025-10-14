@@ -115,10 +115,10 @@ where
 	// Determine the shared parent path and ignores.
 
 	#[rustfmt::skip]
-	let parent: &Path = profile.dirs.iter()
+	let parent: &Path = profile.directories.iter()
 		.flat_map(|path|
 			path.ancestors().find(|ancestor|
-				profile.dirs.iter().all(|path|
+				profile.directories.iter().all(|path|
 					path.starts_with(ancestor))))
 		.next()
 		.ok_or(ArchiveError::FailedToDetermineParentPath)?;
@@ -137,9 +137,9 @@ where
 		ignores: &ignores,
 	};
 
-	println!("Archiving {} directories...", ctx.profile.dirs.len());
+	println!("Archiving {} directories...", ctx.profile.directories.len());
 
-	for dir in &ctx.profile.dirs {
+	for dir in &ctx.profile.directories {
 		println!("Archiving directory <{}>...", dir.display());
 
 		if let Err(e) = compress_dir(&mut writer, &ctx, &parent, dir) {

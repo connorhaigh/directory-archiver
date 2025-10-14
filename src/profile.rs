@@ -8,17 +8,26 @@ use std::{
 
 use serde::Deserialize;
 
+/// Represents a profile.
 #[derive(Debug, Deserialize)]
 pub struct Profile {
+	/// The display name.
 	pub name: String,
 
-	pub dirs: Vec<PathBuf>,
+	/// The paths of directories that will be included.
+	pub directories: Vec<PathBuf>,
+
+	/// The wildcard patterns for directory names and file names that should be ignored.
 	pub ignores: Vec<String>,
 }
 
+/// Represents a profile-related error.
 #[derive(Debug)]
 pub enum ProfileError {
+	/// Indicates that a profile could not be read.
 	FailedToRead(io::Error),
+
+	/// Indicates that the JSON representing a profile could not be parsed.
 	FailedToDeserialise(serde_json::Error),
 }
 
