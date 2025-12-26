@@ -1,6 +1,6 @@
 use std::{
 	error::Error,
-	fmt::Display,
+	fmt::{self, Display},
 	fs::{self, File},
 	io::{self, BufReader},
 	ops::Sub,
@@ -50,7 +50,7 @@ enum ArchiveError {
 	FailedToCreateArchive(io::Error),
 
 	/// Indicates that a particular directory could not be read for its files.
-	FailedToReadDirectory(io::Error),
+	FailedToListDirectory(io::Error),
 
 	/// Indicates that a particular file could not be read for its contents.
 	FailedToReadFile(io::Error),
@@ -71,15 +71,16 @@ enum ArchiveError {
 	FailedToDetermineParentPath,
 }
 
+/// Indicates the result of an archive operation.
 type ArchiveResult = Result<(), ArchiveError>;
 
 impl Display for ArchiveError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
 			Self::FailedToLoad(e) => write!(f, "failed to load profile [{}]", e),
 			Self::FailedToInspectPath(e) => write!(f, "failed to inspect path [{}]", e),
 			Self::FailedToCreateArchive(e) => write!(f, "failed to create archive file [{}]", e),
-			Self::FailedToReadDirectory(e) => write!(f, "failed to read directory [{}]", e),
+			Self::FailedToListDirectory(e) => write!(f, "failed to list directory files [{}]", e),
 			Self::FailedToReadFile(e) => write!(f, "failed to read file [{}]", e),
 			Self::FailedToCopyFile(e) => write!(f, "failed to copy file to archive [{}]", e),
 			Self::FailedToMarkEntry(e) => write!(f, "failed to mark entry in archive [{}]", e),
@@ -169,7 +170,7 @@ where
 		return Ok(());
 	}
 
-	let entries = fs::read_dir(&dir).map_err(ArchiveError::FailedToReadDirectory)?.flatten();
+	let entries = fs::read_dir(&dir).map_err(ArchiveError::FailedToListDirectory)?.flatten();
 	let path = dir.as_ref().strip_prefix(&parent).map_err(ArchiveError::FailedToStripPrefix)?;
 
 	#[allow(deprecated)]
